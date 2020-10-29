@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<head>
+  <script src="node_modules/web3/dist/web3.min.js"></script>
+  <link rel="stylesheet" href="./assets/css/theme.min.css">
+  <link rel="preload" importance="high" href="assets/fonts/HK%20Grotesk%20Pro/HKGroteskPro-Regular.woff2" as="font"/>
+  <link rel="preload" importance="high" href="assets/fonts/HK%20Grotesk%20Pro/HKGroteskPro-Medium.woff" as="font"/>
+  <link href="https://fonts.googleapis.com/css2?family=Inconsolata&display=swap" rel="stylesheet">
+</head>
+
+<body class="bg-light">
+
+  <section class="pt-8">
+    <div class="container">
+      <h1 class="mb-5">Yearn Arbitrageur</h1>
+      <div class="form-group">
+        <input type="input" class="form-control is-valid" id="tokenAmount" placeholder="Token amount (try 10000)">
+      </div>
+      <div class="form-group">
+        <button type="button" class="btn btn-primary btn-block lift" onclick="simulate()">Simulate arb</button>
+      </div>
+    </div>
+  </section>
+
+  <section class="px-4">
+    <div id="results" style="white-space: pre; font-family: 'Inconsolata', monospace; overflow:auto; text-align:center" class="w-100 mx-auto"></div>
+  </section>
+
+
+  <script src="assets/js/main.js"></script>
+</body>
+
+</html>
