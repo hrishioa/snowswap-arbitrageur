@@ -69,6 +69,8 @@ if(window.ethereum) {
       loaded = true;
     })
   })
+} else {
+  appendToResults("No metamask detected.", false);
 }
 
 function loadContracts() {
