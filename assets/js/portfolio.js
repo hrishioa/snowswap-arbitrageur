@@ -14,10 +14,10 @@ if(window.ethereum) {
     console.log("Enabled.");
     loaded = true;
     // getPositions("0x420E7b56927EDfd45B126a0373C4b66ce96F68C6");
-    // pickleFarm = await initializePickleFarm("0xbd17b1ce622d73bd438b9e658aca5996dc394b0d", "0xe86ce08c49f7b9de5ac287bcf2d5066ab49028aa") // 3Crv
+    pickleFarm = await initializePickleFarm("0x420E7b56927EDfd45B126a0373C4b66ce96F68C6") // 3Crv
     // pickleFarm = await initializePickleFarm("0xbd17b1ce622d73bd438b9e658aca5996dc394b0d", "0xfa53a46c2F9131C37Eb41C1c3a8af95418199A9F") // renBTC
     // pickleFarm = await initializePickleFarm("0xbd17b1ce622d73bd438b9e658aca5996dc394b0d", "0x420E7b56927EDfd45B126a0373C4b66ce96F68C6") // Staking & pDAI
-    // appendToResults(getPickleFarmStr(pickleFarm));
+    appendToResults(getPickleFarmStr(pickleFarm));
     // console.log("Pickle farm loaded.");
   })
 } else {
@@ -105,7 +105,8 @@ async function initializePickleFarm(myAddress, farmAddress) {
   let farmContract;
   if(!cachedPickleContract || cachedPickleContract._address !== farmAddress) {
     console.log("loading farm contract");
-    farmContract = await loadEtherscanContract(farmAddress);
+    farmContract = new window.web3.eth.Contract(pickleFarmABI, farmAddress);
+    // farmContract = await loadEtherscanContract(farmAddress);
     cachedPickleContract = farmContract;
   } else {
     farmContract = cachedPickleContract;
@@ -128,61 +129,6 @@ async function initializePickleFarm(myAddress, farmAddress) {
 
   await addMetadata(pickleWithdraws);
 
-
-//############################## TESTING CODE
-  // let pools = [];
-
-  // let index = 16;
-  // console.log("Loading pool ",index);
-  // let ret = {
-  //   poolInfo: await farmContract.methods.poolInfo(index).call(),
-  //   userInfo: await farmContract.methods.userInfo(index, myAddress).call(),
-  //   pendingPickles: parseFloat(await farmContract.methods.pendingPickle(index, myAddress).call())
-  // }
-
-  // ret.tokenContract = new window.web3.eth.Contract(ERC20ABI, ret.poolInfo.lpToken);
-
-  // let pickleJar = await loadPickleJar(ret.poolInfo.lpToken, ret.userInfo.amount, myAddress);
-
-  // if(pickleJar) {
-  //   ret.type = "pickleJar";
-  //   ret.jar = pickleJar;
-  // }
-
-  // ret.tokenName = await ret.tokenContract.methods.name().call();
-
-  // ret.decimals = parseFloat(await ret.tokenContract.methods.decimals().call());
-
-  // ret.withdraws = await farmContract.getPastEvents("Withdraw", {
-  //   filter: {
-  //     user: myAddress,
-  //     pid: String(index),
-  //   },
-  //   fromBlock: 0,
-  //   toBlock: 'latest'
-  // });
-
-  // await addMetadata(ret.withdraws);
-
-  // ret.deposits = await farmContract.getPastEvents("Deposit", {
-  //   filter: {
-  //     user: myAddress,
-  //     pid: String(index),
-  //   },
-  //   fromBlock: 0,
-  //   toBlock: 'latest'
-  // });
-
-  // await addMetadata(ret.deposits);
-
-  // ret.positions = calculatePositions(ret.deposits, ret.withdraws, ret.decimals);
-
-  // calculateRewards(ret.positions, ret.withdraws, ret.pendingPickles, pickleWithdraws);
-
-  // pools.push(ret);
-//########################################## END TESTING CODE
-
-  // TODO: Re-enable this later, it's faster
   let pools = await Promise.all([...Array(poolCount).keys()].map(async index => {
     let ret = {
       poolInfo: await farmContract.methods.poolInfo(index).call(),
@@ -200,6 +146,19 @@ async function initializePickleFarm(myAddress, farmAddress) {
     }
 
     ret.tokenName = await ret.tokenContract.methods.name().call();
+
+    if(ret.type !== "pickleJar" && ret.tokenName.search(/Uniswap/i) !== -1) {
+      try {
+        let uniswapContract = await new window.web3.eth.Contract(uniswapABI, ret.poolInfo.lpToken);
+        let token0 = new window.web3.eth.Contract(ERC20ABI, await uniswapContract.methods.token0().call());
+        let token1 = new window.web3.eth.Contract(ERC20ABI, await uniswapContract.methods.token1().call());
+        ret.token0Name = await token0.methods.name().call();
+        ret.token1Name = await token1.methods.name().call();
+        ret.type = "uniswap";
+      } catch(err) {
+        console.log("Error trying to load uniswap contract - ",err);
+      }
+    }
 
     ret.decimals = parseFloat(await ret.tokenContract.methods.decimals().call());
 
@@ -438,6 +397,7 @@ async function addPickleValue(positions) {
 //################################## PickleJar Functions
 
 let pickleJarABI = JSON.parse(`[{"inputs":[{"internalType":"address","name":"_token","type":"address"},{"internalType":"address","name":"_governance","type":"address"},{"internalType":"address","name":"_controller","type":"address"}],"stateMutability":"nonpayable","type":"constructor"},{"anonymous":false,"inputs":[{"indexed":true,"internalType":"address","name":"owner","type":"address"},{"indexed":true,"internalType":"address","name":"spender","type":"address"},{"indexed":false,"internalType":"uint256","name":"value","type":"uint256"}],"name":"Approval","type":"event"},{"anonymous":false,"inputs":[{"indexed":true,"internalType":"address","name":"from","type":"address"},{"indexed":true,"internalType":"address","name":"to","type":"address"},{"indexed":false,"internalType":"uint256","name":"value","type":"uint256"}],"name":"Transfer","type":"event"},{"inputs":[{"internalType":"address","name":"owner","type":"address"},{"internalType":"address","name":"spender","type":"address"}],"name":"allowance","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},{"inputs":[{"internalType":"address","name":"spender","type":"address"},{"internalType":"uint256","name":"amount","type":"uint256"}],"name":"approve","outputs":[{"internalType":"bool","name":"","type":"bool"}],"stateMutability":"nonpayable","type":"function"},{"inputs":[],"name":"available","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},{"inputs":[],"name":"balance","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},{"inputs":[{"internalType":"address","name":"account","type":"address"}],"name":"balanceOf","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},{"inputs":[],"name":"controller","outputs":[{"internalType":"address","name":"","type":"address"}],"stateMutability":"view","type":"function"},{"inputs":[],"name":"decimals","outputs":[{"internalType":"uint8","name":"","type":"uint8"}],"stateMutability":"view","type":"function"},{"inputs":[{"internalType":"address","name":"spender","type":"address"},{"internalType":"uint256","name":"subtractedValue","type":"uint256"}],"name":"decreaseAllowance","outputs":[{"internalType":"bool","name":"","type":"bool"}],"stateMutability":"nonpayable","type":"function"},{"inputs":[{"internalType":"uint256","name":"_amount","type":"uint256"}],"name":"deposit","outputs":[],"stateMutability":"nonpayable","type":"function"},{"inputs":[],"name":"depositAll","outputs":[],"stateMutability":"nonpayable","type":"function"},{"inputs":[],"name":"earn","outputs":[],"stateMutability":"nonpayable","type":"function"},{"inputs":[],"name":"getRatio","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},{"inputs":[],"name":"governance","outputs":[{"internalType":"address","name":"","type":"address"}],"stateMutability":"view","type":"function"},{"inputs":[{"internalType":"address","name":"reserve","type":"address"},{"internalType":"uint256","name":"amount","type":"uint256"}],"name":"harvest","outputs":[],"stateMutability":"nonpayable","type":"function"},{"inputs":[{"internalType":"address","name":"spender","type":"address"},{"internalType":"uint256","name":"addedValue","type":"uint256"}],"name":"increaseAllowance","outputs":[{"internalType":"bool","name":"","type":"bool"}],"stateMutability":"nonpayable","type":"function"},{"inputs":[],"name":"max","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},{"inputs":[],"name":"min","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},{"inputs":[],"name":"name","outputs":[{"internalType":"string","name":"","type":"string"}],"stateMutability":"view","type":"function"},{"inputs":[{"internalType":"address","name":"_controller","type":"address"}],"name":"setController","outputs":[],"stateMutability":"nonpayable","type":"function"},{"inputs":[{"internalType":"address","name":"_governance","type":"address"}],"name":"setGovernance","outputs":[],"stateMutability":"nonpayable","type":"function"},{"inputs":[{"internalType":"uint256","name":"_min","type":"uint256"}],"name":"setMin","outputs":[],"stateMutability":"nonpayable","type":"function"},{"inputs":[],"name":"symbol","outputs":[{"internalType":"string","name":"","type":"string"}],"stateMutability":"view","type":"function"},{"inputs":[],"name":"token","outputs":[{"internalType":"contract IERC20","name":"","type":"address"}],"stateMutability":"view","type":"function"},{"inputs":[],"name":"totalSupply","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},{"inputs":[{"internalType":"address","name":"recipient","type":"address"},{"internalType":"uint256","name":"amount","type":"uint256"}],"name":"transfer","outputs":[{"internalType":"bool","name":"","type":"bool"}],"stateMutability":"nonpayable","type":"function"},{"inputs":[{"internalType":"address","name":"sender","type":"address"},{"internalType":"address","name":"recipient","type":"address"},{"internalType":"uint256","name":"amount","type":"uint256"}],"name":"transferFrom","outputs":[{"internalType":"bool","name":"","type":"bool"}],"stateMutability":"nonpayable","type":"function"},{"inputs":[{"internalType":"uint256","name":"_shares","type":"uint256"}],"name":"withdraw","outputs":[],"stateMutability":"nonpayable","type":"function"},{"inputs":[],"name":"withdrawAll","outputs":[],"stateMutability":"nonpayable","type":"function"}]`);
+let pickleFarmABI = JSON.parse(`[{"inputs":[{"internalType":"contract PickleToken","name":"_pickle","type":"address"},{"internalType":"address","name":"_devaddr","type":"address"},{"internalType":"uint256","name":"_picklePerBlock","type":"uint256"},{"internalType":"uint256","name":"_startBlock","type":"uint256"},{"internalType":"uint256","name":"_bonusEndBlock","type":"uint256"}],"stateMutability":"nonpayable","type":"constructor"},{"anonymous":false,"inputs":[{"indexed":true,"internalType":"address","name":"user","type":"address"},{"indexed":true,"internalType":"uint256","name":"pid","type":"uint256"},{"indexed":false,"internalType":"uint256","name":"amount","type":"uint256"}],"name":"Deposit","type":"event"},{"anonymous":false,"inputs":[{"indexed":true,"internalType":"address","name":"user","type":"address"},{"indexed":true,"internalType":"uint256","name":"pid","type":"uint256"},{"indexed":false,"internalType":"uint256","name":"amount","type":"uint256"}],"name":"EmergencyWithdraw","type":"event"},{"anonymous":false,"inputs":[{"indexed":true,"internalType":"address","name":"previousOwner","type":"address"},{"indexed":true,"internalType":"address","name":"newOwner","type":"address"}],"name":"OwnershipTransferred","type":"event"},{"anonymous":false,"inputs":[{"indexed":false,"internalType":"address","name":"token","type":"address"},{"indexed":false,"internalType":"uint256","name":"amount","type":"uint256"}],"name":"Recovered","type":"event"},{"anonymous":false,"inputs":[{"indexed":true,"internalType":"address","name":"user","type":"address"},{"indexed":true,"internalType":"uint256","name":"pid","type":"uint256"},{"indexed":false,"internalType":"uint256","name":"amount","type":"uint256"}],"name":"Withdraw","type":"event"},{"inputs":[],"name":"BONUS_MULTIPLIER","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},{"inputs":[{"internalType":"uint256","name":"_allocPoint","type":"uint256"},{"internalType":"contract IERC20","name":"_lpToken","type":"address"},{"internalType":"bool","name":"_withUpdate","type":"bool"}],"name":"add","outputs":[],"stateMutability":"nonpayable","type":"function"},{"inputs":[],"name":"bonusEndBlock","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},{"inputs":[{"internalType":"uint256","name":"_pid","type":"uint256"},{"internalType":"uint256","name":"_amount","type":"uint256"}],"name":"deposit","outputs":[],"stateMutability":"nonpayable","type":"function"},{"inputs":[{"internalType":"address","name":"_devaddr","type":"address"}],"name":"dev","outputs":[],"stateMutability":"nonpayable","type":"function"},{"inputs":[],"name":"devFundDivRate","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},{"inputs":[],"name":"devaddr","outputs":[{"internalType":"address","name":"","type":"address"}],"stateMutability":"view","type":"function"},{"inputs":[{"internalType":"uint256","name":"_pid","type":"uint256"}],"name":"emergencyWithdraw","outputs":[],"stateMutability":"nonpayable","type":"function"},{"inputs":[{"internalType":"uint256","name":"_from","type":"uint256"},{"internalType":"uint256","name":"_to","type":"uint256"}],"name":"getMultiplier","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},{"inputs":[],"name":"massUpdatePools","outputs":[],"stateMutability":"nonpayable","type":"function"},{"inputs":[],"name":"owner","outputs":[{"internalType":"address","name":"","type":"address"}],"stateMutability":"view","type":"function"},{"inputs":[{"internalType":"uint256","name":"_pid","type":"uint256"},{"internalType":"address","name":"_user","type":"address"}],"name":"pendingPickle","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},{"inputs":[],"name":"pickle","outputs":[{"internalType":"contract PickleToken","name":"","type":"address"}],"stateMutability":"view","type":"function"},{"inputs":[],"name":"picklePerBlock","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},{"inputs":[{"internalType":"uint256","name":"","type":"uint256"}],"name":"poolInfo","outputs":[{"internalType":"contract IERC20","name":"lpToken","type":"address"},{"internalType":"uint256","name":"allocPoint","type":"uint256"},{"internalType":"uint256","name":"lastRewardBlock","type":"uint256"},{"internalType":"uint256","name":"accPicklePerShare","type":"uint256"}],"stateMutability":"view","type":"function"},{"inputs":[],"name":"poolLength","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},{"inputs":[],"name":"renounceOwnership","outputs":[],"stateMutability":"nonpayable","type":"function"},{"inputs":[{"internalType":"uint256","name":"_pid","type":"uint256"},{"internalType":"uint256","name":"_allocPoint","type":"uint256"},{"internalType":"bool","name":"_withUpdate","type":"bool"}],"name":"set","outputs":[],"stateMutability":"nonpayable","type":"function"},{"inputs":[{"internalType":"uint256","name":"_bonusEndBlock","type":"uint256"}],"name":"setBonusEndBlock","outputs":[],"stateMutability":"nonpayable","type":"function"},{"inputs":[{"internalType":"uint256","name":"_devFundDivRate","type":"uint256"}],"name":"setDevFundDivRate","outputs":[],"stateMutability":"nonpayable","type":"function"},{"inputs":[{"internalType":"uint256","name":"_picklePerBlock","type":"uint256"}],"name":"setPicklePerBlock","outputs":[],"stateMutability":"nonpayable","type":"function"},{"inputs":[],"name":"startBlock","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},{"inputs":[],"name":"totalAllocPoint","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},{"inputs":[{"internalType":"address","name":"newOwner","type":"address"}],"name":"transferOwnership","outputs":[],"stateMutability":"nonpayable","type":"function"},{"inputs":[{"internalType":"uint256","name":"_pid","type":"uint256"}],"name":"updatePool","outputs":[],"stateMutability":"nonpayable","type":"function"},{"inputs":[{"internalType":"uint256","name":"","type":"uint256"},{"internalType":"address","name":"","type":"address"}],"name":"userInfo","outputs":[{"internalType":"uint256","name":"amount","type":"uint256"},{"internalType":"uint256","name":"rewardDebt","type":"uint256"}],"stateMutability":"view","type":"function"},{"inputs":[{"internalType":"uint256","name":"_pid","type":"uint256"},{"internalType":"uint256","name":"_amount","type":"uint256"}],"name":"withdraw","outputs":[],"stateMutability":"nonpayable","type":"function"}]`);
 
 async function loadPickleJar(farmAddress, shares, myAddress) {
   let pickleJar = {
@@ -463,6 +423,19 @@ async function loadPickleJar(farmAddress, shares, myAddress) {
   pickleJar.baseTokenContract = new window.web3.eth.Contract(ERC20ABI, await pickleJar.contract.methods.token().call());
   pickleJar.baseTokenDecimals = parseFloat(await pickleJar.baseTokenContract.methods.decimals().call());
   pickleJar.baseTokenName = await pickleJar.baseTokenContract.methods.name().call();
+
+  if(pickleJar.baseTokenName.search(/Uniswap/i) !== -1) {
+    try {
+      let uniswapContract = await new window.web3.eth.Contract(uniswapABI, await pickleJar.contract.methods.token().call());
+      let token0 = new window.web3.eth.Contract(ERC20ABI, await uniswapContract.methods.token0().call());
+      let token1 = new window.web3.eth.Contract(ERC20ABI, await uniswapContract.methods.token1().call());
+      pickleJar.token0Name = await token0.methods.name().call();
+      pickleJar.token1Name = await token1.methods.name().call();
+      pickleJar.jarType = "uniswap";
+    } catch(err) {
+      console.log("Error trying to load uniswap contract - ",err);
+    }
+  }
 
   pickleJar.events = await getPickleJarEvents(pickleJar, myAddress);
 
@@ -501,7 +474,7 @@ function collapseOpenPositions(positions) {
 let yieldQuantumMs = 1000*60*60*24.0;
 let yearMs         = 1000*60*60*24*365.25;
 
-function calculateJarProfit(jar) {
+function calculateJarProfit(jar, verbose) {
   jar.positions.map(position => {
     position.openingTokens = (parseFloat(position.amount)/parseFloat(position.depositEvents.reduce((acc, event) => acc+parseFloat(event.returnValues.value), 0)))*(parseFloat(position.depositEvents.reduce((acc, event) => acc+parseFloat(event.tokenEvent.returnValues.value), 0)));
   })
@@ -523,15 +496,17 @@ function calculateJarProfit(jar) {
     position.interestRate = (position.profitTokens/quantumsPassed)/position.openingTokens;
     position.yieldRate = ((1+position.interestRate)**(yearMs/yieldQuantumMs))-1;
 
-    console.log("openingTokens - ",position.openingTokens, ", closingTokens - ",position.closingTokens, " open position - ",position.open, " position - ",position, ", jar - ",jar);
+    if(verbose)
+      console.log("openingTokens - ",position.openingTokens, ", closingTokens - ",position.closingTokens, " open position - ",position.open, " position - ",position, ", jar - ",jar);
 
-    console.log("Got profit ",position.profitTokens/(10**jar.baseTokenDecimals), jar.baseTokenName," for ",((position.open ? new Date() : new Date(position.closed))-new Date(position.opened))/(1000*60*60*24)," days with APY% ",position.yieldRate*100.0);
+    if(verbose)
+      console.log("Got profit ",position.profitTokens/(10**jar.baseTokenDecimals), jar.baseTokenName," for ",((position.open ? new Date() : new Date(position.closed))-new Date(position.opened))/(1000*60*60*24)," days with APY% ",position.yieldRate*100.0);
   });
 
 
 }
 
-async function getPickleJarEvents(jar, myAddress) {
+async function getPickleJarEvents(jar, myAddress, verbose) {
   let deposits = await jar.contract.getPastEvents("Transfer", {
     filter: {
       from: "0x0000000000000000000000000000000000000000",
@@ -545,7 +520,8 @@ async function getPickleJarEvents(jar, myAddress) {
   addMetadata(deposits);
 
   if(deposits.length)
-    console.log("Found ",deposits.length," deposit transactions for jar ",jar.baseTokenName, " - ",deposits," at ",jar.address);
+    if(verbose)
+      console.log("Found ",deposits.length," deposit transactions for jar ",jar.baseTokenName, " - ",deposits," at ",jar.address);
 
   let tokenDeposits = await jar.baseTokenContract.getPastEvents("Transfer", {
     filter: {
@@ -559,7 +535,8 @@ async function getPickleJarEvents(jar, myAddress) {
   addOrdering(tokenDeposits);
 
   if(tokenDeposits.length)
-    console.log("Found ",tokenDeposits.length, " token deposit transactions for ",jar.baseTokenName);
+    if(verbose)
+      console.log("Found ",tokenDeposits.length, " token deposit transactions for ",jar.baseTokenName);
 
   deposits.map(deposit => {
     let matchingTokenEvent = tokenDeposits.find(tD => tD.ordering === deposit.ordering)
@@ -583,7 +560,8 @@ async function getPickleJarEvents(jar, myAddress) {
   addMetadata(withdraws);
 
   if(withdraws.length)
-    console.log("Found ",withdraws.length," withdraw transactions for jar ",jar.baseTokenName," at ",jar.address);
+    if(verbose)
+      console.log("Found ",withdraws.length," withdraw transactions for jar ",jar.baseTokenName," at ",jar.address);
 
   let tokenWithdraws = await jar.baseTokenContract.getPastEvents("Transfer", {
     filter: {
@@ -597,7 +575,8 @@ async function getPickleJarEvents(jar, myAddress) {
   addOrdering(tokenWithdraws);
 
   if(tokenWithdraws.length)
-    console.log("Found ",tokenWithdraws.length, " token withdraw transactions for ",jar.baseTokenName);
+    if(verbose)
+      console.log("Found ",tokenWithdraws.length, " token withdraw transactions for ",jar.baseTokenName);
 
   withdraws.map(withdraw => {
     let matchingTokenEvent = tokenWithdraws.find(tD => tD.ordering === withdraw.ordering)
@@ -608,7 +587,8 @@ async function getPickleJarEvents(jar, myAddress) {
     }
   })
 
-  console.log("Submitting ",deposits.length," deposits and ",withdraws.length," withdraws for jar ",jar.baseTokenName);
+  if(verbose)
+    console.log("Submitting ",deposits.length," deposits and ",withdraws.length," withdraws for jar ",jar.baseTokenName);
 
   return {
     deposits,
@@ -698,7 +678,15 @@ function getPickleFarmStr(pickleFarm) {
       }).join("\n\n");
     }
 
-    return `\t\tFarm ${pool.tokenName}: \n\n`+pool.positions.map(position => {
+    let farmName = "";
+    if(pool.type==="pickleJar" && pool.jar.jarType === "uniswap")
+      farmName = `Farm for ${pool.jar.token0Name}/${pool.jar.token1Name} Pickle Jar`;
+    else if(pool.type === "uniswap")
+      farmName = `Farm for ${pool.token0Name}/${pool.token1Name} pair`;
+    else
+      farmName = `${pool.tokenName} Farm`;
+
+    return `\t\t${farmName}: \n\n`+pool.positions.map(position => {
       let positionStr = `<a href="${etherScanLinkTx(position.depositEvent.transactionHash)}" target="_blank">Opened</a> on ${position.opened.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })}${position.closed ? `, <a href="${etherScanLinkTx(position.withdrawEvent.transactionHash)}" target="_blank">Closed</a> on ${position.closed.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })}` : ""}`;
 
       positionStr += `\nAmount: ${(position.amount/(10**pool.decimals)).toFixed(10)} ${pool.tokenName}`;
